@@ -5,15 +5,15 @@ from PIL import Image
 from timm.data.transforms_factory import create_transform
 import requests
 from mamba_ssm import Mamba
-from xlstm import (
-    xLSTMBlockStack,
-    xLSTMBlockStackConfig,
-    mLSTMBlockConfig,
-    mLSTMLayerConfig,
-    sLSTMBlockConfig,
-    sLSTMLayerConfig,
-    FeedForwardConfig,
-)
+#from xlstm import (
+#    xLSTMBlockStack,
+#    xLSTMBlockStackConfig,
+#    mLSTMBlockConfig,
+#    mLSTMLayerConfig,
+#    sLSTMBlockConfig,
+#    sLSTMLayerConfig,
+#    FeedForwardConfig,
+#)
 torch.manual_seed(1)
 
 
@@ -21,34 +21,40 @@ class MambaVisionModel(nn.Module):
     def __init__(self):
         super(MambaVisionModel, self).__init__()
         self.MambaVision = AutoModel.from_pretrained("nvidia/MambaVision-T-1K", trust_remote_code=True)#.requires_grad_(False)
-        self.fcBlock0 = nn.Sequential(nn.Linear(in_features=20480, out_features=1024),
+        self.fcBlock1 = nn.Sequential(nn.Linear(in_features=20480, out_features=1024),
                                       nn.ReLU(),
                                       nn.Dropout(0.5))
         
-        self.fcBlock1 = nn.Sequential(nn.Linear(in_features=10240, out_features=1024),
+        self.fcBlock2 = nn.Sequential(nn.Linear(in_features=10240, out_features=1024),
                                       nn.ReLU(),
                                       nn.Dropout(0.5))
 
-        self.fcBlock2 = nn.Sequential(nn.Linear(in_features=2048, out_features=256),
+        self.fcBlock0 = nn.Sequential(nn.Linear(in_features=40960, out_features=1024),
                                       nn.ReLU(),
                                       nn.Dropout(0.5))
-
-        self.output = nn.Sequential(nn.Linear(in_features=256, out_features=10),
+        self.fcBlock3 = nn.Sequential(nn.Linear(in_features=2048, out_features=1024),
+                                      nn.ReLU(),
+                                      nn.Dropout(0.5))
+        self.output = nn.Sequential(nn.Linear(in_features=1024, out_features=10),
                                     nn.Softmax(dim=1))
-        self.MambaSeq = Mamba(d_model=1, d_state=16,  d_conv=4, expand=2)  
+        self.MambaSeq = Mamba(d_model=7680, d_state=64,  d_conv=4, expand=2).to("cuda") 
 
     def forward(self, inp):
         #print(f'inp shape: {inp.shape}')
         ## Chunk division
-        print(f'inp out: {inp.shape}')
+        #print(f'inp out: {inp.shape}')
+        """
         chunk1 = inp[:,:,0:90,:]
         chunk2 = inp[:,:,70:160,:]
         chunk3 = inp[:,:,145:235,:]
         chunk4 = inp[:,:,220:310,:]
         chunk5 = inp[:,:,295:385,:]
         chunk6 = inp[:,:,363:448,:]
-        print(f'chunk out: {chunk1.shape}')
+        """
+        #print(f'chunk out: {chunk1.shape}')
         ## padd input 
+        padded = torch.cat([inp,inp,inp],dim=1)
+        """
         padded1 = torch.cat([chunk2,chunk1,chunk1],dim=1)
         padded2 = torch.cat([chunk2,chunk2,chunk2],dim=1)
         padded3 = torch.cat([chunk3,chunk3,chunk3],dim=1)
@@ -56,13 +62,16 @@ class MambaVisionModel(nn.Module):
         padded5 = torch.cat([chunk5,chunk5,chunk5],dim=1)
         padded6 = torch.cat([chunk6,chunk6,chunk6],dim=1)
         #print(f'padded shape: {padded.shape}')
+        """
+        """
         out_avg_pool1, features1 = self.MambaVision(padded1)
         out_avg_pool2, features2 = self.MambaVision(padded2)
         out_avg_pool3, features3 = self.MambaVision(padded3)
         out_avg_pool4, features4 = self.MambaVision(padded4)
         out_avg_pool5, features5 = self.MambaVision(padded5)
         out_avg_pool6, features6 = self.MambaVision(padded6)
-        print(f'fetures out: {features1[3].shape}')
+        
+        #print(f'fetures out: {features1[3].shape}')
         fetures_flat1 = features1[3].reshape(chunk1.shape[0],1,7680)
         fetures_flat2 = features2[3].reshape(chunk2.shape[0],1,7680)
         fetures_flat3 = features3[3].reshape(chunk3.shape[0],1,7680)
@@ -70,18 +79,30 @@ class MambaVisionModel(nn.Module):
         fetures_flat5 = features5[3].reshape(chunk5.shape[0],1,7680)
         fetures_flat6 = features6[3].reshape(chunk6.shape[0],1,7680)
         #fetures_flat3 = features[3].reshape(inp.shape[0],10240)
+        
         #print(f'features[3] shape: {features[3].shape}')
         #print(f'features[2] shape: {features[2].shape}')
         #print(f'features[1] shape: {features[1].shape}')
         ## Concat 
         concat = torch.cat((fetures_flat1,fetures_flat2,fetures_flat3,fetures_flat4,fetures_flat5,fetures_flat6),dim=1)
-        print(f'mamba in: {concat.shape}')
+        outMamba = self.MambaSeq(concat)
+        """
+        #print(f'mamba in: {concat.shape}')
         #concat = concat.permute(0,2,1)
-        outMamba = Mamba(concat)
-        print(f'mamba out: {outMamba.shape}')
+        #print(f'mamba out: {outMamba.shape}')
+        # take prediction
+        out_avg_pool1, features = self.MambaVision(padded)
+        #outMamba = self.MambaSeq(features1[3].reshape(chunk1.shape[0],1,7680*6))
+        #outMamba = outMamba.reshape(outMamba.shape[0],7680)
         #out3 = self.fcBlock1(fetures_flat3)
-        #out = torch.cat((out2,out3),dim=1)        
-        out = self.fcBlock2(outMamba)
+        #out = torch.cat((out2,out3),dim=1)  
+        #print(features[2].shape)      
+        #print(features[3].shape) 
+        #out0 = self.fcBlock0(features[1].reshape(padded.shape[0],40960))     
+        out1 = self.fcBlock1(features[2].reshape(padded.shape[0],20480))
+        out2 = self.fcBlock2(features[3].reshape(padded.shape[0],10240))
+        out = torch.cat((out1,out2),dim=1) 
+        out = self.fcBlock3(out)
         out = self.output(out)
         return out
 
