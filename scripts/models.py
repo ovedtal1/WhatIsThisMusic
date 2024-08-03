@@ -4,8 +4,59 @@ from transformers import AutoModel
 from PIL import Image
 from timm.data.transforms_factory import create_transform
 import requests
+from transformers import ViTImageProcessor, ViTModel
+import kornia.augmentation as K
+from kornia.augmentation import AugmentationSequential
 from mamba_ssm import Mamba
 torch.manual_seed(1)
+
+
+class DinoModel(nn.Module):
+    def __init__(self,augmantations=None):
+        super(DinoModel, self,).__init__()
+        self.Dino = ViTModel.from_pretrained('facebook/dino-vits8')#.requires_grad_(False)
+        self.augmantations = augmantations
+        self.dim_reduction = nn.Sequential(
+            nn.Linear(384, 256),
+            nn.ReLU()
+        )
+        
+        # Reduce the sequence length to a fixed size
+        self.pool = nn.AdaptiveAvgPool1d(100)
+        
+        # Fully connected layers
+        self.fc1 = nn.Sequential(nn.Linear(in_features=785 * 100, out_features=1024),
+                                      nn.ReLU(),
+                                      nn.Dropout(0.1))
+        self.fc2 = nn.Sequential(nn.Linear(in_features=1024, out_features=10),
+                                    nn.Softmax(dim=1))
+        self.aug_list = AugmentationSequential(
+                    K.Resize(size=(224, 224)),  # Resize to 224x224
+                    )
+    def forward(self, inp,mode='test'):
+        ## Padd input 
+        padded = torch.cat([inp,inp,inp],dim=1)
+        padded = self.aug_list(padded)
+
+        ## Take prediction
+        outputs = self.Dino(padded)
+        last_hidden_states = outputs.last_hidden_state
+
+        # Reduce feature dimension
+        x = self.dim_reduction(last_hidden_states)  # Shape: [batch, reduced_feature_dim, sequence_length]
+        
+        # Apply pooling
+        x = self.pool(x)  # Shape: [batch, reduced_feature_dim, pooled_sequence_length]
+
+        # Flatten
+        x = x.view(x.size(0), -1)  # Shape: [batch, reduced_feature_dim * pooled_sequence_length]
+  
+        # Fully connected layers
+        x = torch.relu(self.fc1(x))
+        x = self.fc2(x)  # Shape: [batch, num_classes]
+        
+        return x
+
 
 
 class MambaVisionModel(nn.Module):
