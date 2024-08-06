@@ -57,13 +57,26 @@ class DinoModel(nn.Module):
         
         return x
 
+## Special augmantation
+import random
+class CircularShiftTransform:
+    def __init__(self, max_shift, axis, probability=0.5):
+        self.max_shift = max_shift
+        self.axis = axis
+        self.probability = probability
 
-
+    def __call__(self, image):
+        if random.random() < self.probability:
+            shift = random.randint(0, self.max_shift)
+            return torch.roll(image, shifts=shift, dims=self.axis)
+        return image
+    
 class MambaVisionModel(nn.Module):
     def __init__(self,augmantations=None):
         super(MambaVisionModel, self,).__init__()
         self.MambaVision = AutoModel.from_pretrained("nvidia/MambaVision-T-1K", trust_remote_code=True)#.requires_grad_(False)
         self.augmantations = augmantations
+        self.SpecialAug = CircularShiftTransform(max_shift=120, axis=2, probability=0.9)
         self.fcBlock1 = nn.Sequential(nn.Linear(in_features=20480, out_features=1024),
                                       nn.ReLU(),
                                       nn.Dropout(0.5))
@@ -76,16 +89,18 @@ class MambaVisionModel(nn.Module):
         self.fcBlock3 = nn.Sequential(nn.Linear(in_features=2048, out_features=1024),
                                       nn.ReLU(),
                                       nn.Dropout(0.5))
-        self.output = nn.Sequential(nn.Linear(in_features=1024, out_features=10),
-                                    nn.Softmax(dim=1))
+        #self.output = nn.Sequential(nn.Linear(in_features=1024, out_features=10),
+        #                            nn.Softmax(dim=1))
+        self.output = nn.Sequential(nn.Linear(in_features=1024, out_features=10))
 
     def forward(self, inp,mode='test'):
         ## Padd input 
         padded = torch.cat([inp,inp,inp],dim=1)
-       
+
         ## Augmantations 
-        if self.augmantations != None & mode =='train': # Augmantations
+        if self.augmantations is not None and mode == 'train': # Augmantations
             padded = self.augmantations(padded)
+            padded = self.SpecialAug(padded)
 
         ## Take prediction
         out_avg_pool1, features = self.MambaVision(padded)
@@ -146,7 +161,7 @@ class CnnModel(nn.Module):
         self.output = nn.Sequential(nn.Linear(in_features=256, out_features=10),
                                     nn.Softmax(dim=1))
 
-    def forward(self, inp):
+    def forward(self, inp,mode='test'):
         #print(inp.shape)
 
         out = self.convBlock1(inp)

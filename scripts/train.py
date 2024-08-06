@@ -3,8 +3,9 @@ import numpy as np
 import torch
 import json
 from torch import optim
-from util import bce_loss, accuracy_function, matrix_tuple
+from util import ce_loss, accuracy_function, matrix_tuple
 from Paras import Para
+
 
 
 def train(model, epoch, train_loader, optimizer, versatile=True):
@@ -24,9 +25,9 @@ def train(model, epoch, train_loader, optimizer, versatile=True):
             target = target.cuda()
 
         optimizer.zero_grad()
-        predicted = model(spec_input)
+        predicted = model(spec_input,'train')
 
-        loss_value = bce_loss(predicted, target)
+        loss_value = ce_loss(predicted, target)
         accuracy_value = accuracy_function(predicted, target)
 
         loss_value.backward()
@@ -38,7 +39,7 @@ def train(model, epoch, train_loader, optimizer, versatile=True):
         if versatile:
             if (_index + 1) % Para.log_step == 0:
                 elapsed = time.time() - start_time
-                print('Epoch{:3d} | {:3d}/{:3d} batches | {:5.2f}ms/ batch | BCE: {:5.4f} | Accuracy: {:5.2f}% |'
+                print('Epoch{:3d} | {:3d}/{:3d} batches | {:5.2f}ms/ batch | CE: {:5.4f} | Accuracy: {:5.2f}% |'
                       .format(epoch, _index + 1, batch_num,
                               elapsed * 1000 / (_index + 1),
                               train_loss / (_index + 1),
@@ -48,7 +49,7 @@ def train(model, epoch, train_loader, optimizer, versatile=True):
     accuracy /= (_index + 1)
     scheduler.step()
     print('-' * 99)
-    print('End of training epoch {:3d} | time: {:5.2f}s | BCE: {:5.4f} | Accuracy: {:5.2f}% |'
+    print('End of training epoch {:3d} | time: {:5.2f}s | CE: {:5.4f} | Accuracy: {:5.2f}% |'
           .format(epoch, (time.time() - start_time),
                   train_loss, accuracy * 100))
 
@@ -73,7 +74,7 @@ def validate_test(model, epoch, use_loader):
 
             predicted = model(spec_input)
 
-            loss_value = bce_loss(predicted, target)
+            loss_value = ce_loss(predicted, target)
             accuracy_value = accuracy_function(predicted, target)
 
             v_loss += loss_value.data.item()
@@ -82,7 +83,7 @@ def validate_test(model, epoch, use_loader):
     v_loss /= (_index + 1)
     accuracy /= (_index + 1)
 
-    print('End of validation epoch {:3d} | time: {:5.2f}s | BCE: {:5.4f} | Accuracy: {:5.2f}% |'
+    print('End of validation epoch {:3d} | time: {:5.2f}s | CE: {:5.4f} | Accuracy: {:5.2f}% |'
           .format(epoch, (time.time() - start_time),
                   v_loss, accuracy * 100))
     print('-' * 99)
@@ -145,7 +146,7 @@ def main_train(model, train_loader, valid_loader, log_name, save_name, lr=Para.l
 
         print('-' * 99)
 
-        # Use BCE loss value for learning rate scheduling
+        # Use CE loss value for learning rate scheduling
         decay_cnt += 1
 
         if np.min(t_loss) not in t_loss[-3:] and decay_cnt > 2:
