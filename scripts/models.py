@@ -28,17 +28,16 @@ class DinoModel(nn.Module):
         self.fc1 = nn.Sequential(nn.Linear(in_features=785 * 100, out_features=1024),
                                       nn.ReLU(),
                                       nn.Dropout(0.1))
-        self.fc2 = nn.Sequential(nn.Linear(in_features=1024, out_features=10),
-                                    nn.Softmax(dim=1))
+        self.fc2 = nn.Sequential(nn.Linear(in_features=1024, out_features=10))
         self.aug_list = AugmentationSequential(
                     K.Resize(size=(224, 224)),  # Resize to 224x224
                     )
     def forward(self, inp,mode='test'):
-        ## Padd input 
+        # Padd input 
         padded = torch.cat([inp,inp,inp],dim=1)
         padded = self.aug_list(padded)
 
-        ## Take prediction
+        # Take prediction
         outputs = self.Dino(padded)
         last_hidden_states = outputs.last_hidden_state
 
@@ -85,12 +84,10 @@ class MambaVisionModel(nn.Module):
                                       nn.ReLU(),
                                       nn.Dropout(0.5))
 
-
         self.fcBlock3 = nn.Sequential(nn.Linear(in_features=2048, out_features=1024),
                                       nn.ReLU(),
                                       nn.Dropout(0.5))
-        #self.output = nn.Sequential(nn.Linear(in_features=1024, out_features=10),
-        #                            nn.Softmax(dim=1))
+
         self.output = nn.Sequential(nn.Linear(in_features=1024, out_features=10))
 
     def forward(self, inp,mode='test'):
@@ -158,8 +155,7 @@ class CnnModel(nn.Module):
                                       nn.ReLU(),
                                       nn.Dropout(0.5))
 
-        self.output = nn.Sequential(nn.Linear(in_features=256, out_features=10),
-                                    nn.Softmax(dim=1))
+        self.output = nn.Sequential(nn.Linear(in_features=256, out_features=10))
 
     def forward(self, inp,mode='test'):
         #print(inp.shape)
